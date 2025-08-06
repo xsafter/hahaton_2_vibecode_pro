@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="jumbotron">
+    <div class="container">
+        <h1>Storyline Map</h1>
+        <p>Navigate through the CTF challenges following the storyline</p>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Your Progress Through the Story</h3>
+                    <div class="legend mt-2">
+                        <span class="badge badge-success">Solved</span>
+                        <span class="badge badge-warning">Available</span>
+                        <span class="badge badge-secondary">Locked</span>
+                        <span class="badge badge-danger">Timed Challenge</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="graph-container" style="height: 500px; border: 1px solid #ddd;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Progress Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div id="progress-stats"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Available Challenges</h5>
+                </div>
+                <div class="card-body">
+                    <div id="available-challenges"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Graph data from backend
+    const graphData = {{ graph_data | safe }};
+
+    // Calculate statistics
+    const stats = {
+        total: graphData.nodes.length,
+        solved: graphData.nodes.filter(n => n.status === 'solved').length,
+        unlocked: graphData.nodes.filter(n => n.status === 'unlocked').length,
+        locked: graphData.nodes.filter(n => n.status === 'locked').length
+    };
+
+    // Display statistics
+    document.getElementById('progress-stats').innerHTML = `
+        <p><strong>Total Challenges:</strong> ${stats.total}</p>
+        <p><strong>Solved:</strong> ${stats.solved}</p>
+        <p><strong>Available:</strong> ${stats.unlocked}</p>
+        <p><strong>Locked:</strong> ${stats.locked}</p>
+        <div class="progress">
+            <div class="progress-bar bg-success" style="width: ${(stats.solved/stats.total)*100}%"></div>
+        </div>
+        <small class="text-muted">${Math.round((stats.solved/stats.total)*100)}% Complete</small>
+    `;
+
+    // Display available challenges
+    const availableChallenges = graphData.nodes.filter(n => n.status === 'unlocked');
+    if (availableChallenges.length > 0) {
+        document.getElementById('available-challenges').innerHTML = availableChallenges.map(c =>
+            `<div class="mb-2">
+                <a href="/challenges#${c.category}-${c.id}" class="btn btn-outline-primary btn-sm">
+                    ${c.label} (${c.value} pts)
+                </a>
+            </div>`
+        ).join('');
+    } else {
+        document.getElementById('available-challenges').innerHTML = '<p class="text-muted">No challenges available right now.</p>';
+    }
+
+    // Prepare data for vis.js
+    const nodes = new vis.DataSet(graphData.nodes.map(node => ({
+        id: node.id,
+        label: `${node.label}\n${node.value} pts`,
+        color: getNodeColor(node.status),
+        font: {
+            color: node.status === 'locked' ? '#999' : '#333',
+            size: node.status === 'solved' ? 14 : 12
+        },
+        shape: node.max_lifetime ? 'diamond' : 'box',
+        margin: 8,
+        borderWidth: node.status === 'solved' ? 3 : 1,
+        borderColor: node.status === 'solved' ? '#28a745' : '#ccc'
+    })));
+
+    const edges = new vis.DataSet(graphData.edges.map(edge => ({
+        from: edge.from,
+        to: edge.to,
+        arrows: 'to',
+        color: edge.has_timer ? '#dc3545' : '#007bff',
+        width: edge.has_timer ? 3 : 2,
+        dashes: edge.has_timer,
+        label: edge.has_timer ? '⏰' : ''
+    })));
+
+    function getNodeColor(status) {
+        switch(status) {
+            case 'solved': return '#d4edda';
+            case 'unlocked': return '#fff3cd';
+            case 'locked': return '#f8d7da';
+            default: return '#e2e3e5';
+        }
+    }
+
+    // Create network
+    const container = document.getElementById('graph-container');
+    const data = { nodes: nodes, edges: edges };
+    const options = {
+        layout: {
+            hierarchical: {
+                direction: 'UD',
+                sortMethod: 'directed'
+            }
+        },
+        physics: {
+            enabled: true,
+            hierarchicalRepulsion: {
+                centralGravity: 0.0,
+                springLength: 80,
+                springConstant: 0.01,
+                nodeDistance: 100,
+                damping: 0.09
+            },
+            maxVelocity: 50,
+            solver: 'hierarchicalRepulsion',
+            stabilization: { iterations: 100 }
+        },
+        nodes: {
+            font: { size: 11 },
+            margin: 8,
+            widthConstraint: { maximum: 120 }
+        },
+        edges: {
+            smooth: {
+                type: 'cubicBezier',
+                forceDirection: 'vertical',
+                roundness: 0.4
+            }
+        },
+        interaction: {
+            hover: true,
+            selectConnectedEdges: false
+        }
+    };
+
+    const network = new vis.Network(container, data, options);
+
+    // Add click handler for nodes
+    network.on('click', function(params) {
+        if (params.nodes.length > 0) {
+            const nodeId = params.nodes[0];
+            const node = graphData.nodes.find(n => n.id === nodeId);
+            if (node && node.status === 'unlocked') {
+                // Redirect to challenge
+                window.location.href = `/challenges#${node.category}-${nodeId}`;
+            } else if (node && node.status === 'locked') {
+                alert('This challenge is locked. Complete prerequisite challenges first!');
+            }
+        }
+    });
+
+    // Add hover tooltips
+    network.on('hoverNode', function(params) {
+        const nodeId = params.node;
+        const node = graphData.nodes.find(n => n.id === nodeId);
+        if (node) {
+            network.canvas.body.container.title = `${node.label}\nCategory: ${node.category}\nValue: ${node.value} points\nStatus: ${node.status}`;
+        }
+    });
+
+    network.on('blurNode', function() {
+        network.canvas.body.container.title = '';
+    });
+});
+</script>
+
+<style>
+.vis-network {
+    outline: none;
+}
+
+#graph-container {
+    background: #f8f9fa;
+}
+
+.legend .badge {
+    margin-right: 10px;
+}
+
+.card {
+    margin-bottom: 15px;
+}
+
+.progress {
+    height: 8px;
+    margin-top: 5px;
+}
+</style>
+{% endblock %}
