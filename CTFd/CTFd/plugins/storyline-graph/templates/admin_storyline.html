@@ -1,5 +1,12 @@
 {% extends "admin/base.html" %}
 
+{% block scripts %}
+{{ super() }}
+<!-- Ensure jQuery is loaded -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"
+        crossorigin="anonymous"></script>
+{% endblock %}
+
 {% block content %}
 <div class="jumbotron">
     <div class="container">
@@ -218,7 +225,7 @@ function updateChallenge() {
     };
 
     $.ajax({
-        url: `/api/storyline/challenge/${challengeId}`,
+        url: `/api/admin/storyline/challenge/${challengeId}`,
         method: 'POST',
         contentType: 'application/json',
         data: JSON.stringify(data),
@@ -266,7 +273,7 @@ function saveModalChanges() {
     };
 
     $.ajax({
-        url: `/api/storyline/challenge/${currentEditingId}`,
+        url: `/api/admin/storyline/challenge/${currentEditingId}`,
         method: 'POST',
         contentType: 'application/json',
         data: JSON.stringify(data),

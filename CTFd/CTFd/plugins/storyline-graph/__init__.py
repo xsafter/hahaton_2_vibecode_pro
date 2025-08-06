@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 from CTFd.models import db, Challenges, Solves, Users, Teams
 from CTFd.utils.decorators import admins_only, authed_only
 from CTFd.utils.user import get_current_user, get_current_team
-from CTFd.plugins import register_plugin_assets_directory, override_template
+from CTFd.plugins import register_plugin_assets_directory, override_template, bypass_csrf_protection
 from CTFd.plugins import register_plugin_asset
 from CTFd.utils import get_config
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
@@ -176,8 +176,9 @@ def api_admin_graph():
     graph_data = get_graph_data()
     return jsonify(graph_data)
 
-@storyline_bp.route('/api/storyline/challenge/<int:challenge_id>', methods=['POST'])
+@storyline_bp.route('/api/admin/storyline/challenge/<int:challenge_id>', methods=['POST'])
 @admins_only
+@bypass_csrf_protection
 def update_storyline_challenge(challenge_id):
     """Update or create storyline challenge settings"""
     data = request.get_json()

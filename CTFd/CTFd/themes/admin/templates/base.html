@@ -25,6 +25,8 @@
 			'end': {{ Configs.end | tojson }}
 		}
 	</script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"
+        crossorigin="anonymous"></script>
 	{% block stylesheets %} {% endblock %}
 	{% for stylesheet in get_registered_admin_stylesheets() %}
 		{% if stylesheet.startswith('http') %}
